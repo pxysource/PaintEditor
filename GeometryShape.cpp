@@ -10,6 +10,7 @@ GeometryShape::GeometryShape() : _state(0)
   , _paintType(EPaintType::EPT_None)
   , _moveEnabled(false)
   , _dragResizeEnabled(false)
+  , _valid(true)
 {
     initPen();
 }
@@ -502,7 +503,9 @@ void Circle::Move(QPoint point)
     _guideRadiusLine.setP2(_radiusLine.p2());
 }
 
-Rect::Rect() : _isNeedGuide(false), _cursorShape(Qt::CursorShape::CrossCursor)
+Rect::Rect() : _isNeedGuide(false)
+  , _cursorShape(Qt::CursorShape::CrossCursor)
+  , _dragCursorShape(Qt::CursorShape::CrossCursor)
 {
     _paintType = EPaintType::EPT_Rect;
 }
@@ -517,7 +520,6 @@ void Rect::Paint(QPainter &painter)
     {
         if (_dragResizeEnabled)
         {
-            qDebug() << _cursorShape;
             painter.setPen(_guideLinePen);
             painter.drawRect(_guideRect);
             return;
@@ -564,7 +566,6 @@ void Rect::Paint(QPainter &painter)
     {
         painter.setPen(_linePen);
         painter.drawRect(_rect);
-        //qDebug() << "rect:" << _curRect.x() << " " << _curRect.y();
     }
 }
 
@@ -595,6 +596,15 @@ void Rect::UpdateState(EPaintStateType paintStateType, QPoint point)
             updateRect(_rect, _p1, point);
             _isNeedGuide = false;
             _completed = true;
+
+            if ((_rect.width() < DELTA) || (_rect.height() < DELTA))
+            {
+                _valid = false;
+            }
+            else
+            {
+                _valid = true;
+            }
         }
 
         break;
@@ -726,6 +736,12 @@ void Rect::DragResize(const QPoint &point)
     default:
         break;
     }
+}
+
+void Rect::SetDragResizeEnabled(bool enable)
+{
+    GeometryShape::SetDragResizeEnabled(enable);
+    _dragCursorShape = _cursorShape;
 }
 
 void Rect::updateRect(QRect &rect, const QPoint &p1, const QPoint &p2)

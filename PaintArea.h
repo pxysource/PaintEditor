@@ -12,6 +12,8 @@ class PaintArea : public QWidget
 {
     Q_OBJECT
 public:
+    constexpr static Qt::CursorShape DefaultCursorShape = Qt::CursorShape::CrossCursor;
+
     explicit PaintArea(QWidget *parent = nullptr);
     virtual ~PaintArea();
 
@@ -21,13 +23,13 @@ public:
 signals:
 
 protected:
+
     void paintEvent(QPaintEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *e) override;
     void keyPressEvent(QKeyEvent *event) override;
     void wheelEvent(QWheelEvent *event) override;
-    void resizeEvent(QResizeEvent *event) override;
 //    void dragEnterEvent(QDragEnterEvent *event) override;
 //    void dragMoveEvent(QDragMoveEvent *event) override;
 //    void dropEvent(QDropEvent *event) override;
@@ -49,23 +51,10 @@ private:
     bool _moveEnabled;
     bool _dragResizeEnabled;
 
-    int _gridMinGap;
-    int _gridMaxGap;
-    qreal _gridGap;
-    qreal _gridColLineStartX;
-    qreal _gridRowLineStartY;
-    QPen _gridLightPen;
-    QPen _gridDarkPen;
-
     qreal _scaleX;
     qreal _scaleY;
 
     QPoint _moveStartCursorPos;
-
-    void drawXYCoordinateText(QPainter &painter);
-
-    void initGrid();
-    void drawGrid(QPainter &painter);
 
     void paintCursorLine();
     /**
@@ -105,17 +94,9 @@ private:
      * @return true - 需要重绘图新，false - 无需重绘图形。
      */
     bool moveReleaseHandler(const QPoint &point);
-    /**
-     * @brief moveHandler
-     * @param point
-     * @return true - 需要重绘图新，false - 无需重绘图形。
-     */
-    bool moveHandler(const QPoint &point);
     void cursorShapeHandler(const QPoint &point);
-    void selectAllHandler();
-    void deleteHandler();
-    bool dragResizeHandler(const QPoint &point);
-    bool dragReleaseHandler();
+    void selectAllShapes();
+    void deleteSelectedShapes();
 };
 
 #endif // PAINTAREA_H

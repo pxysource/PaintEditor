@@ -15,8 +15,25 @@ public:
 public slots:
     void ImageOptChangedHandler(int optMode);
 
+protected:
+    void paintEvent(QPaintEvent *event) override;
+    void wheelEvent(QWheelEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
+
 private:
     PaintImage *_paintImage;
+
+    int _gridMinGap;
+    int _gridMaxGap;
+    qreal _gridGap;
+    qreal _gridColLineStartX;
+    qreal _gridRowLineStartY;
+    QPen _gridLightPen;
+    QPen _gridDarkPen;
+
+    void drawXYCoordinateText(QPainter &painter);
+    void initGrid();
+    void drawGrid(QPainter &painter);
 };
 
 class PaintAreaMainWrapper : public QWidget

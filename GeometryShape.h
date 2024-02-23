@@ -81,6 +81,10 @@ public:
     {
         _dragResizeEnabled = enable;
     }
+    bool IsValid()
+    {
+        return _valid;
+    }
 
 protected:
     QPen _pointPen;
@@ -94,6 +98,7 @@ protected:
     QPoint _moveStartCursorPoint;
     bool _moveEnabled;
     bool _dragResizeEnabled;
+    bool _valid;
 
 private:
     void initPen();
@@ -191,6 +196,7 @@ public:
     void Move(QPoint point) override;
     Qt::CursorShape GetResizeCursorShape(QPoint point) override;
     void DragResize(const QPoint &point) override;
+    void SetDragResizeEnabled(bool enable) override;
 
 protected:
     bool _isNeedGuide;
@@ -202,6 +208,7 @@ protected:
     QPoint _oldP2;
 
     Qt::CursorShape _cursorShape;
+    Qt::CursorShape _dragCursorShape;
 
     void updateRect(QRect &rect, const QPoint &p1, const QPoint &p2);
     void dragResizeRectVertical(QRect &rect, const QPoint& point);

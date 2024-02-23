@@ -1,6 +1,9 @@
 #include "PaintImage.h"
 
 #include <QFileDialog>
+#include <QApplication>
+#include <QWheelEvent>
+#include <QDebug>
 
 PaintImage::PaintImage(QWidget *parent) : PaintArea(parent), _saveEnabled(false)
 {
@@ -43,6 +46,55 @@ void PaintImage::paintEvent(QPaintEvent *event)
     painter.drawImage(targetRect, *_image, sourceRect);
 
     this->paintShapes();
+}
+
+void PaintImage::wheelEvent(QWheelEvent *event)
+{
+    PaintArea::wheelEvent(event);
+
+    /*
+     * Ctrl + 鼠标滚轮，进行绘图区域的缩放。
+     */
+    if (QApplication::keyboardModifiers() == Qt::ControlModifier)
+    {
+        QPoint numDegrees = event->angleDelta();
+        int step = 0;
+
+        if (!numDegrees.isNull())
+        {
+            step = numDegrees.y();
+        }
+
+        event->accept();
+
+        int curWidth = this->width();
+        int curHeight = this->height();
+        curWidth += step;
+        curHeight += step;
+        qDebug() << step;
+
+        if (step > 0)
+        {
+            qDebug() << "Zoom out: " << curWidth << " " << curHeight;
+        }
+        else
+        {
+            qDebug() << "Zoom in: " << curWidth << " " << curHeight;
+        }
+
+        if ((curWidth > this->maximumWidth()) || (curWidth < this->minimumWidth()))
+        {
+            return;
+        }
+        if ((curHeight > this->maximumHeight()) || (curHeight < this->minimumHeight()))
+        {
+            return;
+        }
+
+        *_image = _image->scaled(curWidth, curHeight);
+        qDebug() << _image->size();
+        resize(curWidth, curHeight);
+    }
 }
 
 void PaintImage::paintShapes()

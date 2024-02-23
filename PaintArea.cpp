@@ -30,7 +30,6 @@ PaintArea::PaintArea(QWidget *parent) : QWidget(parent)
     {
         _coreMap.insert(static_cast<EPaintType>(i), new QList<GeometryShape *>());
     }
-    qDebug() << _coreMap.count();
 
     _selectedList.clear();
 
@@ -41,27 +40,21 @@ PaintArea::PaintArea(QWidget *parent) : QWidget(parent)
     // 可触发keyPressEvent事件
     setFocusPolicy(Qt::StrongFocus);
     QWidget::installEventFilter(this);
-
-    initGrid();
-    this->setAcceptDrops(true);
 }
 
 PaintArea::~PaintArea()
 {
     for (auto list : _coreMap.values())
     {
-        if (list != nullptr)
+        for (auto item : *list)
         {
-            for (auto item : *list)
+            if (item != nullptr)
             {
-                if (item != nullptr)
-                {
-                    delete item;
-                }
+                delete item;
             }
-
-            delete list;
         }
+
+        delete list;
     }
 }
 
@@ -120,15 +113,6 @@ void PaintArea::paintEvent(QPaintEvent *event)
 {
     QWidget::paintEvent(event);
     QPainter painter(this);
-
-    painter.save();
-    drawGrid(painter);
-    drawXYCoordinateText(painter);
-    painter.restore();
-
-
-//    painter.rotate(60);
-    painter.scale(_scaleX, _scaleY);
     paintAllShapes(painter);
 }
 
@@ -142,6 +126,7 @@ void PaintArea::mousePressEvent(QMouseEvent *event)
     {
         if ((_lastPaintShape == nullptr) || (_lastPaintShape->GetCompleted()))
         {
+            this->setCursor(Qt::CursorShape::SizeAllCursor);
             _moveStartCursorPos = event->pos();
             return;
         }
@@ -215,13 +200,14 @@ void PaintArea::mouseReleaseEvent(QMouseEvent *event)
     {
         if ((_lastPaintShape == nullptr) || (_lastPaintShape->GetCompleted()))
         {
+            this->setCursor(DefaultCursorShape);
             return;
         }
     }
 
     if (!_coreMap.contains(paintType))
     {
-        qCritical() << "Error: mouseReleaseEvent(), Invalid paint type!";
+        //qCritical() << "Error: mouseReleaseEvent(), Invalid paint type!";
         return;
     }
 
@@ -235,13 +221,29 @@ void PaintArea::mouseReleaseEvent(QMouseEvent *event)
             break;
         }
 
-        if (this->dragReleaseHandler())
+        /*
+         * 拖拽改变图形的大小，完成。
+         */
+        if (_dragResizeEnabled)
         {
+            _dragResizeEnabled = false;
+            _selectedList.last()->SetDragResizeEnabled(false);
+            update();
             break;
         }
 
-        if (moveReleaseHandler(event->pos()))
+        /*
+         * 移动图形，完成。
+         */
+        if (_moveEnabled)
         {
+            for (auto item : _selectedList)
+            {
+                item->MoveEnd(event->pos());
+            }
+
+            _moveEnabled = false;
+            update();
             break;
         }
 
@@ -260,6 +262,13 @@ void PaintArea::mouseReleaseEvent(QMouseEvent *event)
         case EPaintType::EPT_Rect:
         case EPaintType::EPT_Ellipse:
             _lastPaintShape->UpdateState(GeometryShape::EPaintStateType::EPST_PaintEnd, event->pos());
+            if (_lastPaintShape->GetCompleted() && !_lastPaintShape->IsValid())
+            {
+                qWarning() << "Warn: Invalid shape! " << paintType;
+                _coreMap[paintType]->removeOne(_lastPaintShape);
+                delete _lastPaintShape;
+            }
+
             _lastPaintShape = nullptr;
             update();
             break;
@@ -288,15 +297,11 @@ void PaintArea::mouseMoveEvent(QMouseEvent *e)
             this->move(this->pos() + (e->pos() - _moveStartCursorPos));
             return;
         }
-        else
-        {
-            this->setCursor(Qt::CursorShape::CrossCursor);
-        }
     }
 
     if (!_coreMap.contains(paintType))
     {
-        qDebug() << "Error: mouseMoveEvent(), Invalid paint type!";
+        //qDebug() << "Error: mouseMoveEvent(), Invalid paint type!";
         return;
     }
 
@@ -310,13 +315,27 @@ void PaintArea::mouseMoveEvent(QMouseEvent *e)
         return;
     }
 
-    if (dragResizeHandler(e->pos()))
+    /*
+     * 拖拽图形改变其大小，进行中...
+     */
+    if (_dragResizeEnabled)
     {
+        _selectedList.last()->DragResize(e->pos());
+        update();
         return;
     }
 
-    if (moveHandler(e->pos()))
+    /*
+     * 移动图形，进行中...
+     */
+    if (_moveEnabled)
     {
+        for (auto item : _selectedList)
+        {
+            item->Move(e->pos());
+        }
+
+        update();
         return;
     }
 
@@ -344,13 +363,13 @@ void PaintArea::keyPressEvent(QKeyEvent *event)
 {
     if ((event->modifiers() == Qt::ControlModifier) && (event->key() == Qt::Key_A))
     {
-        qDebug() << "Key: Ctrl + A";
-        selectAllHandler();
+        //qDebug() << "Key: Ctrl + A";
+        selectAllShapes();
     }
     if ((event->key() == Qt::Key_Delete))
     {
-        qDebug() << "Key: Del";
-        deleteHandler();
+        //qDebug() << "Key: Del";
+        deleteSelectedShapes();
     }
 }
 
@@ -363,6 +382,8 @@ void PaintArea::wheelEvent(QWheelEvent *event)
      */
     if (QApplication::keyboardModifiers() == Qt::ControlModifier)
     {
+        qDebug() << this->cursor().pos();
+        qDebug() << this->pos();
         QPoint numDegrees = event->angleDelta();
         int step = 0;
 
@@ -401,48 +422,18 @@ void PaintArea::wheelEvent(QWheelEvent *event)
         int oldHeight = this->height();
         _scaleX += (curWidth - oldWidth) * 1.0 / oldWidth;
         _scaleY += (curHeight - oldHeight) * 1.0 / oldHeight;
-
-        resize(curWidth, curHeight);
-
-        if (event->angleDelta().y() > 0)
-        {
-            _gridGap += 0.1;
-        }
-        else if (event->angleDelta().y() < 0)
-        {
-            _gridGap -= 0.1;
-        }
-        else
-        {
-
-        }
-
-        if (_gridGap >= _gridMaxGap)
-        {
-            _gridGap = _gridMinGap;
-        }
-        else if (_gridGap <= _gridMinGap)
-        {
-            _gridGap = _gridMaxGap;
-        }
-
-        update();
     }
-}
-
-void PaintArea::resizeEvent(QResizeEvent *event)
-{
-    QWidget::resizeEvent(event);
-    _gridColLineStartX = 0;
-    _gridRowLineStartY = 0;
-    update();
 }
 
 void PaintArea::paintAllShapes(QPainter& painter)
 {
+    painter.save();
+    //painter.rotate(60);
+    painter.scale(_scaleX, _scaleY);
+
     for (auto list : _coreMap.values())
     {
-        if (list != nullptr)
+        if (!list->isEmpty())
         {
             for (auto item : *list)
             {
@@ -453,93 +444,8 @@ void PaintArea::paintAllShapes(QPainter& painter)
             }
         }
     }
-}
 
-void PaintArea::drawXYCoordinateText(QPainter &painter)
-{
-    // TODO: 使用控件绑定到鼠标位置...
-    QString xy = QString("X:%0 Y:%1").arg(QString::number(this->cursor().pos().x())).arg(QString::number(this->cursor().pos().y()));
-    painter.drawText(QPoint(20, this->height() - 30), xy);
-}
-
-void PaintArea::initGrid()
-{
-    _gridMinGap = 20;
-    _gridMaxGap = 30;
-    _gridGap = (_gridMinGap + _gridMaxGap) / 2;
-    _gridColLineStartX = 0;
-    _gridRowLineStartY = 0;
-    _gridLightPen = QPen(QColor("#f0fff0"));
-    _gridLightPen.setStyle(Qt::PenStyle::DotLine);
-    _gridLightPen.setWidth(1);
-    _gridDarkPen  = QPen(QColor("#f0fff0"));
-    _gridDarkPen.setStyle(Qt::PenStyle::DotLine);
-    _gridDarkPen.setWidth(2);
-}
-
-void PaintArea::drawGrid(QPainter &painter)
-{
-    int lineCnt = 0;
-    qreal bigY = _gridRowLineStartY;
-    qreal smallY = _gridRowLineStartY;
-
-    painter.setPen(_gridDarkPen);
-
-    /*
-     * 绘制行线条。
-     */
-    while (true)
-    {
-        painter.drawLine(QPointF(0.0, bigY), QPointF(this->width(), bigY));
-        painter.drawLine(QPointF(0.0, smallY), QPointF(this->width(), smallY));
-
-        bigY += _gridGap;
-        smallY += _gridGap;
-        if ((smallY <= 0) || (bigY >= this->height()))
-        {
-            break;
-        }
-
-        lineCnt++;
-        if (lineCnt == 10)
-        {
-            painter.setPen(_gridDarkPen);
-            lineCnt = 0;
-        }
-        else
-        {
-            painter.setPen(_gridLightPen);
-        }
-    }
-
-    lineCnt = 0;
-    qreal bigX = _gridColLineStartX;
-    qreal smallX = _gridColLineStartX;
-    painter.setPen(_gridDarkPen);
-
-    while (true)
-    {
-        painter.drawLine(QPointF(bigX, 0.0), QPointF(bigX, this->height()));
-        painter.drawLine(QPointF(smallX, 0.0), QPointF(smallX, this->width()));
-
-        bigX += _gridGap;
-        smallX += _gridGap;
-        if ((smallX <=0 ) || (bigX >= this->width()))
-        {
-            break;
-        }
-
-        lineCnt++;
-        if (lineCnt == 10)
-        {
-            painter.setPen(_gridDarkPen);
-            lineCnt = 0;
-        }
-        else
-        {
-            painter.setPen(_gridLightPen);
-        }
-    }
+    painter.restore();
 }
 
 void PaintArea::paintCursorLine()
@@ -569,7 +475,7 @@ void PaintArea::multiSelectHandler(const QPoint &point)
 {
     for (auto list : _coreMap.values())
     {
-        if ((list != nullptr) && !list->isEmpty())
+        if (!list->isEmpty())
         {
             auto it = std::find_if(list->begin(), list->end(), [=](GeometryShape *rect){
                 return rect->Contains(point);
@@ -608,7 +514,7 @@ void PaintArea::singleSelectPressHandler(const QPoint &point)
             {
                 /*
                  * 上一次选择为多选，本次单选时：
-                 * 点击其中某一个选中项，直接返回。
+                 * 点击其中某一个选中项，设置选中项目为可移动状态。
                  */
                 if ((_selectedList.count() > 1) && (_selectedList.contains(*it)))
                 {
@@ -639,23 +545,25 @@ void PaintArea::singleSelectPressHandler(const QPoint &point)
             }
             else
             {
-                for (auto item : _selectedList)
+                if (_selectedList.count() == 1)
                 {
-                    if(item->GetResizeCursorShape(point) != Qt::CursorShape::CrossCursor)
+                    if(_selectedList.last()->GetResizeCursorShape(point) != Qt::CursorShape::CrossCursor)
                     {
-                        qDebug() << "YYYYYYYYY";
                         _dragResizeEnabled = true;
-                        item->SetDragResizeEnabled(true);
+                        _selectedList.last()->SetDragResizeEnabled(true);
                     }
                     else
                     {
-                        _dragResizeEnabled = false;
-                        item->SetDragResizeEnabled(false);
+                        _selectedList.last()->SetSelected(false);
+                        _selectedList.clear();
                     }
                 }
-
-                if (!_dragResizeEnabled)
+                else
                 {
+                    for (auto item : _selectedList)
+                    {
+                        item->SetSelected(false);
+                    }
                     _selectedList.clear();
                 }
             }
@@ -679,7 +587,7 @@ bool PaintArea::singleSelectReleaseHandler(const QPoint &point)
             {
                 /*
                  * 上一次选择为多选，本次单选时：
-                 * 点击其中某一个选中项，直接返回。
+                 * 点击其中某一个选中项，变为单选。
                  */
                 if ((_selectedList.count() > 1) && (_selectedList.contains(*it)))
                 {
@@ -689,7 +597,6 @@ bool PaintArea::singleSelectReleaseHandler(const QPoint &point)
                     }
 
                     _selectedList.clear();
-
                     (*it)->SetSelected(true);
                     _selectedList.append(*it);
                 }
@@ -703,73 +610,21 @@ bool PaintArea::singleSelectReleaseHandler(const QPoint &point)
     return ret;
 }
 
-bool PaintArea::moveReleaseHandler(const QPoint &point)
-{
-    bool hasSelectedItem = false;
-    bool ret = false;
-
-    if (_moveEnabled && !_selectedList.isEmpty())
-    {
-        for (auto item : _selectedList)
-        {
-            if (item->GetSelected())
-            {
-                hasSelectedItem = true;
-                item->MoveEnd(point);
-            }
-        }
-
-        if (hasSelectedItem)
-        {
-            _moveEnabled = false;
-            update();
-            ret = true;
-        }
-    }
-
-    return ret;
-}
-
-bool PaintArea::moveHandler(const QPoint &point)
-{
-    bool hasSelectedItem = false;
-    bool ret = false;
-
-    if (_moveEnabled)
-    {
-        if (!_selectedList.isEmpty())
-        {
-            for (auto item : _selectedList)
-            {
-                if (item->GetSelected())
-                {
-                    item->Move(point);
-                    hasSelectedItem = true;
-                }
-            }
-
-            if (hasSelectedItem)
-            {
-                _moveEnabled = true;
-                update();
-                ret = true;
-            }
-        }
-    }
-
-    return ret;
-}
-
 void PaintArea::cursorShapeHandler(const QPoint &point)
 {
     bool useDefaultCursorShape = true;
     Qt::CursorShape cursorShape = Qt::CursorShape::CrossCursor;
 
+    if (_moveEnabled || _dragResizeEnabled)
+    {
+        return;
+    }
+
     if ((_lastPaintShape == nullptr) || _lastPaintShape->GetCompleted())
     {
         for (auto list : _coreMap.values())
         {
-            if ((list != nullptr))
+            if (list != nullptr)
             {
                 for (auto item : *list)
                 {
@@ -799,7 +654,7 @@ void PaintArea::cursorShapeHandler(const QPoint &point)
     }
 }
 
-void PaintArea::selectAllHandler()
+void PaintArea::selectAllShapes()
 {
     for (auto item : _selectedList)
     {
@@ -809,7 +664,7 @@ void PaintArea::selectAllHandler()
 
     for (auto list : _coreMap.values())
     {
-        if ((list != nullptr) && !list->isEmpty())
+        if (!list->isEmpty())
         {
             for (auto item : *list)
             {
@@ -820,7 +675,7 @@ void PaintArea::selectAllHandler()
     }
 }
 
-void PaintArea::deleteHandler()
+void PaintArea::deleteSelectedShapes()
 {
     if (!_selectedList.isEmpty())
     {
@@ -834,61 +689,4 @@ void PaintArea::deleteHandler()
         _selectedList.clear();
         update();
     }
-}
-
-bool PaintArea::dragResizeHandler(const QPoint &point)
-{
-    bool hasSelectedItem = false;
-    bool ret = false;
-
-    if (_dragResizeEnabled)
-    {
-        if (!_selectedList.isEmpty())
-        {
-            for (auto item : _selectedList)
-            {
-                if (item->GetSelected())
-                {
-                    item->DragResize(point);
-                    hasSelectedItem = true;
-                }
-            }
-
-            if (hasSelectedItem)
-            {
-                _dragResizeEnabled = true;
-                update();
-                ret = true;
-            }
-        }
-    }
-
-    return ret;
-}
-
-bool PaintArea::dragReleaseHandler()
-{
-    bool hasSelectedItem = false;
-    bool ret = false;
-
-    if (_dragResizeEnabled && !_selectedList.isEmpty())
-    {
-        for (auto item : _selectedList)
-        {
-            if (item->GetSelected())
-            {
-                hasSelectedItem = true;
-                item->SetDragResizeEnabled(false);
-            }
-        }
-
-        if (hasSelectedItem)
-        {
-            _dragResizeEnabled = false;
-            update();
-            ret = true;
-        }
-    }
-
-    return ret;
 }
