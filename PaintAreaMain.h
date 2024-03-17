@@ -2,6 +2,7 @@
 #define PAINTAREAMAIN_H
 
 #include <QWidget>
+#include <QLabel>
 #include "PaintArea.h"
 #include "PaintImage.h"
 
@@ -9,7 +10,8 @@ class PaintAreaMain : public PaintArea
 {
     Q_OBJECT
 public:
-    explicit PaintAreaMain(QWidget *parent = nullptr);
+//    explicit PaintAreaMain(QWidget *parent = nullptr);
+    PaintAreaMain(QGraphicsScene *scene, QWidget *parent = nullptr);
     void SetPaintType(EPaintType type) override;
 
 public slots:
@@ -19,21 +21,12 @@ protected:
     void paintEvent(QPaintEvent *event) override;
     void wheelEvent(QWheelEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
+    void mouseMoveEvent(QMouseEvent *e) override;
 
 private:
     PaintImage *_paintImage;
-
-    int _gridMinGap;
-    int _gridMaxGap;
-    qreal _gridGap;
-    qreal _gridColLineStartX;
-    qreal _gridRowLineStartY;
-    QPen _gridLightPen;
-    QPen _gridDarkPen;
-
-    void drawXYCoordinateText(QPainter &painter);
-    void initGrid();
-    void drawGrid(QPainter &painter);
+    QLabel *_curPosLabel;
+    void updateXYCoordinateText();
 };
 
 class PaintAreaMainWrapper : public QWidget

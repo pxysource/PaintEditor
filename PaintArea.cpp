@@ -13,8 +13,10 @@
 #include <QMimeData>
 #include <QDropEvent>
 #include <QDrag>
+#include <QGraphicsView>
+#include <QGraphicsScene>
 
-PaintArea::PaintArea(QWidget *parent) : QWidget(parent)
+PaintArea::PaintArea(QGraphicsScene *scene, QWidget *parent) : QGraphicsView(scene, parent)
   , _paintType(EPaintType::EPT_None)
   , _lastPaintShape(nullptr)
   , _lastSelectedShape(nullptr)
@@ -23,8 +25,6 @@ PaintArea::PaintArea(QWidget *parent) : QWidget(parent)
   , _mouseMoveEnabled(true)
   , _moveEnabled(false)
   , _dragResizeEnabled(false)
-  , _scaleX(1)
-  , _scaleY(1)
 {
     for (int i = EPaintType::EPT_Point; i < EPaintType::EPT_End; i++)
     {
@@ -40,6 +40,13 @@ PaintArea::PaintArea(QWidget *parent) : QWidget(parent)
     // 可触发keyPressEvent事件
     setFocusPolicy(Qt::StrongFocus);
     QWidget::installEventFilter(this);
+
+    // 隐藏水平滚动条
+    this->setHorizontalScrollBarPolicy(Qt::ScrollBarPolicy::ScrollBarAlwaysOff);
+    // 隐藏垂直滚动条
+    this->setVerticalScrollBarPolicy(Qt::ScrollBarPolicy::ScrollBarAlwaysOff);
+    this->setTransformationAnchor(QGraphicsView::AnchorUnderMouse);
+    this->setResizeAnchor(QGraphicsView::AnchorUnderMouse);
 }
 
 PaintArea::~PaintArea()
@@ -60,7 +67,7 @@ PaintArea::~PaintArea()
 
 bool PaintArea::eventFilter(QObject *object, QEvent *event)
 {
-    Q_UNUSED(object);
+    Q_UNUSED(object)
     bool ret = false;
 
     switch (event->type())
@@ -111,15 +118,16 @@ void PaintArea::SetPaintType(EPaintType type)
 
 void PaintArea::paintEvent(QPaintEvent *event)
 {
-    QWidget::paintEvent(event);
-    QPainter painter(this);
-    paintAllShapes(painter);
+    QGraphicsView::paintEvent(event);
+//    QPainter painter(this);
+//    paintAllShapes(painter);
 }
 
 void PaintArea::mousePressEvent(QMouseEvent *event)
 {
     EPaintType paintType = _paintType;
     GeometryShape *shape = nullptr;
+    QPoint eventPos = this->AdjustedPos(event->pos());
 
     if ((event->button() == Qt::MouseButton::LeftButton) &&
             ((QApplication::keyboardModifiers() == Qt::AltModifier)))
@@ -127,7 +135,7 @@ void PaintArea::mousePressEvent(QMouseEvent *event)
         if ((_lastPaintShape == nullptr) || (_lastPaintShape->GetCompleted()))
         {
             this->setCursor(Qt::CursorShape::SizeAllCursor);
-            _moveStartCursorPos = event->pos();
+            _moveStartCursorPos = eventPos;
             return;
         }
     }
@@ -141,18 +149,18 @@ void PaintArea::mousePressEvent(QMouseEvent *event)
     switch (event->button())
     {
     case Qt::MouseButton::LeftButton:
-        qDebug() << this->objectName() << ": Left button press." << this->cursor().pos();
+        qDebug() << this->objectName() << ": Left button press." << eventPos;
 
         if ((_lastPaintShape == nullptr) || (_lastPaintShape->GetCompleted()))
         {
             if (QApplication::keyboardModifiers() == Qt::ControlModifier)
             {
                 qDebug() << "Key: Ctrl + LeftButton, press";
-                this->multiSelectHandler(event->pos());
+                this->multiSelectHandler(eventPos);
                 break;
             }
 
-            this->singleSelectPressHandler(event->pos());
+            this->singleSelectPressHandler(eventPos);
             if (_selectedList.count() > 0)
             {
                 break;
@@ -166,11 +174,11 @@ void PaintArea::mousePressEvent(QMouseEvent *event)
         }
 
         _lastPaintShape = _coreMap[paintType]->last();
-        _lastPaintShape->UpdateState(GeometryShape::EPaintStateType::EPST_Painting, event->pos());
+        _lastPaintShape->UpdateState(GeometryShape::EPaintStateType::EPST_Painting, eventPos);
 
         if (_lastPaintShape->GetCompleted())
         {
-            update();
+            this->viewport()->update();
         }
 
         break;
@@ -180,7 +188,7 @@ void PaintArea::mousePressEvent(QMouseEvent *event)
         case EPaintType::EPT_Polyline:
             _lastPaintShape->UpdateState(GeometryShape::EPaintStateType::EPST_PaintEnd, QPoint());
             _lastPaintShape = nullptr;
-            update();
+            this->viewport()->update();
             break;
         default:
             break;
@@ -194,6 +202,7 @@ void PaintArea::mousePressEvent(QMouseEvent *event)
 void PaintArea::mouseReleaseEvent(QMouseEvent *event)
 {
     EPaintType paintType = _paintType;
+    QPoint eventPos = this->AdjustedPos(event->pos());
 
     if ((event->button() == Qt::MouseButton::LeftButton) &&
             ((QApplication::keyboardModifiers() == Qt::AltModifier)))
@@ -228,7 +237,7 @@ void PaintArea::mouseReleaseEvent(QMouseEvent *event)
         {
             _dragResizeEnabled = false;
             _selectedList.last()->SetDragResizeEnabled(false);
-            update();
+            this->viewport()->update();
             break;
         }
 
@@ -239,17 +248,17 @@ void PaintArea::mouseReleaseEvent(QMouseEvent *event)
         {
             for (auto item : _selectedList)
             {
-                item->MoveEnd(event->pos());
+                item->MoveEnd(eventPos);
             }
 
             _moveEnabled = false;
-            update();
+            this->viewport()->update();
             break;
         }
 
         if ((_lastPaintShape == nullptr) || (_lastPaintShape->GetCompleted()))
         {
-            if (singleSelectReleaseHandler(event->pos()))
+            if (singleSelectReleaseHandler(eventPos))
             {
                 break;
             }
@@ -261,7 +270,7 @@ void PaintArea::mouseReleaseEvent(QMouseEvent *event)
         case EPaintType::EPT_Circle:
         case EPaintType::EPT_Rect:
         case EPaintType::EPT_Ellipse:
-            _lastPaintShape->UpdateState(GeometryShape::EPaintStateType::EPST_PaintEnd, event->pos());
+            _lastPaintShape->UpdateState(GeometryShape::EPaintStateType::EPST_PaintEnd, eventPos);
             if (_lastPaintShape->GetCompleted() && !_lastPaintShape->IsValid())
             {
                 qWarning() << "Warn: Invalid shape! " << paintType;
@@ -270,7 +279,7 @@ void PaintArea::mouseReleaseEvent(QMouseEvent *event)
             }
 
             _lastPaintShape = nullptr;
-            update();
+            this->viewport()->update();
             break;
         default:
             break;
@@ -287,6 +296,7 @@ void PaintArea::mouseReleaseEvent(QMouseEvent *event)
 void PaintArea::mouseMoveEvent(QMouseEvent *e)
 {
     EPaintType paintType = _paintType;
+    QPoint eventPos = this->AdjustedPos(e->pos());
 
     if ((_lastPaintShape == nullptr) || _lastPaintShape->GetCompleted())
     {
@@ -294,7 +304,7 @@ void PaintArea::mouseMoveEvent(QMouseEvent *e)
                 (QApplication::keyboardModifiers() == Qt::AltModifier))
         {
             this->setCursor(Qt::CursorShape::SizeAllCursor);
-            this->move(this->pos() + (e->pos() - _moveStartCursorPos));
+            this->move(this->pos() + (eventPos - _moveStartCursorPos));
             return;
         }
     }
@@ -305,7 +315,7 @@ void PaintArea::mouseMoveEvent(QMouseEvent *e)
         return;
     }
 
-    cursorShapeHandler(e->pos());
+    cursorShapeHandler(eventPos);
 
     /*
      * Ctrl + 鼠标移动，忽略...
@@ -320,8 +330,8 @@ void PaintArea::mouseMoveEvent(QMouseEvent *e)
      */
     if (_dragResizeEnabled)
     {
-        _selectedList.last()->DragResize(e->pos());
-        update();
+        _selectedList.last()->DragResize(eventPos);
+        this->viewport()->update();
         return;
     }
 
@@ -332,10 +342,10 @@ void PaintArea::mouseMoveEvent(QMouseEvent *e)
     {
         for (auto item : _selectedList)
         {
-            item->Move(e->pos());
+            item->Move(eventPos);
         }
 
-        update();
+        this->viewport()->update();
         return;
     }
 
@@ -350,8 +360,8 @@ void PaintArea::mouseMoveEvent(QMouseEvent *e)
     case EPaintType::EPT_Polyline:
         if ((_lastPaintShape != nullptr) && !_lastPaintShape->GetCompleted())
         {
-            _lastPaintShape->UpdateState(GeometryShape::EPaintStateType::EPST_GuidePaintting, e->pos());
-            update();
+            _lastPaintShape->UpdateState(GeometryShape::EPaintStateType::EPST_GuidePaintting, eventPos);
+            this->viewport()->update();
         }
         break;
     default:
@@ -382,8 +392,8 @@ void PaintArea::wheelEvent(QWheelEvent *event)
      */
     if (QApplication::keyboardModifiers() == Qt::ControlModifier)
     {
-        qDebug() << this->cursor().pos();
-        qDebug() << this->pos();
+//        qDebug() << this->cursor().pos();
+//        qDebug() << this->pos();
         QPoint numDegrees = event->angleDelta();
         int step = 0;
 
@@ -393,35 +403,6 @@ void PaintArea::wheelEvent(QWheelEvent *event)
         }
 
         event->accept();
-
-        int curWidth = this->width();
-        int curHeight = this->height();
-        curWidth += step;
-        curHeight += step;
-        qDebug() << step;
-
-        if (step > 0)
-        {
-            qDebug() << "Zoom out: " << curWidth << " " << curHeight;
-        }
-        else
-        {
-            qDebug() << "Zoom in: " << curWidth << " " << curHeight;
-        }
-
-        if ((curWidth > this->maximumWidth()) || (curWidth < this->minimumWidth()))
-        {
-            return;
-        }
-        if ((curHeight > this->maximumHeight()) || (curHeight < this->minimumHeight()))
-        {
-            return;
-        }
-
-        int oldWidth = this->width();
-        int oldHeight = this->height();
-        _scaleX += (curWidth - oldWidth) * 1.0 / oldWidth;
-        _scaleY += (curHeight - oldHeight) * 1.0 / oldHeight;
     }
 }
 
@@ -429,7 +410,7 @@ void PaintArea::paintAllShapes(QPainter& painter)
 {
     painter.save();
     //painter.rotate(60);
-    painter.scale(_scaleX, _scaleY);
+    painter.scale(this->transform().m11(), this->transform().m22());
 
     for (auto list : _coreMap.values())
     {
@@ -502,6 +483,8 @@ void PaintArea::multiSelectHandler(const QPoint &point)
 
 void PaintArea::singleSelectPressHandler(const QPoint &point)
 {
+    GeometryShape *shape = nullptr;
+
     for (auto list : _coreMap.values())
     {
         if ((list != nullptr) && !list->isEmpty())
@@ -512,61 +495,63 @@ void PaintArea::singleSelectPressHandler(const QPoint &point)
 
             if (it != list->end())
             {
-                /*
-                 * 上一次选择为多选，本次单选时：
-                 * 点击其中某一个选中项，设置选中项目为可移动状态。
-                 */
-                if ((_selectedList.count() > 1) && (_selectedList.contains(*it)))
-                {
-                    for (auto item : _selectedList)
-                    {
-                        item->MoveBegin(point);
-                    }
-                    _moveEnabled = true;
-
-                    break;
-                }
-                else
-                {
-                    for (auto item : _selectedList)
-                    {
-                        item->SetSelected(false);
-                    }
-
-                    _selectedList.clear();
-                }
-
-                _moveEnabled = true;
-                (*it)->SetSelected(true);
-                (*it)->MoveBegin(point);
-                _selectedList.append(*it);
-
+                shape = *it;
                 break;
+            }
+        }
+    }
+
+    if (shape != nullptr)
+    {
+        /*
+         * 上一次选择为多选，本次单选时：
+         * 点击其中某一个选中项，设置选中项目为可移动状态。
+         */
+        if ((_selectedList.count() > 1) && (_selectedList.contains(shape)))
+        {
+            for (auto item : _selectedList)
+            {
+                item->MoveBegin(point);
+            }
+            _moveEnabled = true;
+        }
+        else
+        {
+            for (auto item : _selectedList)
+            {
+                item->SetSelected(false);
+            }
+
+            _selectedList.clear();
+        }
+
+        _moveEnabled = true;
+        shape->SetSelected(true);
+        shape->MoveBegin(point);
+        _selectedList.append(shape);
+    }
+    else
+    {
+        if (_selectedList.count() == 1)
+        {
+            if(_selectedList.last()->GetResizeCursorShape(point) != Qt::CursorShape::CrossCursor)
+            {
+                _dragResizeEnabled = true;
+                _selectedList.last()->SetDragResizeEnabled(true);
             }
             else
             {
-                if (_selectedList.count() == 1)
-                {
-                    if(_selectedList.last()->GetResizeCursorShape(point) != Qt::CursorShape::CrossCursor)
-                    {
-                        _dragResizeEnabled = true;
-                        _selectedList.last()->SetDragResizeEnabled(true);
-                    }
-                    else
-                    {
-                        _selectedList.last()->SetSelected(false);
-                        _selectedList.clear();
-                    }
-                }
-                else
-                {
-                    for (auto item : _selectedList)
-                    {
-                        item->SetSelected(false);
-                    }
-                    _selectedList.clear();
-                }
+                _selectedList.last()->SetSelected(false);
+                _selectedList.clear();
             }
+        }
+        else
+        {
+            for (auto item : _selectedList)
+            {
+                item->SetSelected(false);
+            }
+            _selectedList.clear();
         }
     }
 }
@@ -574,6 +559,7 @@ void PaintArea::singleSelectPressHandler(const QPoint &point)
 bool PaintArea::singleSelectReleaseHandler(const QPoint &point)
 {
     bool ret = false;
+    GeometryShape *shape = nullptr;
 
     for (auto list : _coreMap.values())
     {
@@ -585,26 +571,31 @@ bool PaintArea::singleSelectReleaseHandler(const QPoint &point)
 
             if (it != list->end())
             {
-                /*
-                 * 上一次选择为多选，本次单选时：
-                 * 点击其中某一个选中项，变为单选。
-                 */
-                if ((_selectedList.count() > 1) && (_selectedList.contains(*it)))
-                {
-                    for (auto item : _selectedList)
-                    {
-                        item->SetSelected(false);
-                    }
-
-                    _selectedList.clear();
-                    (*it)->SetSelected(true);
-                    _selectedList.append(*it);
-                }
-
-                ret = true;
+                shape = *it;
                 break;
             }
         }
+    }
+
+    if (shape != nullptr)
+    {
+        /*
+         * 上一次选择为多选，本次单选时：
+         * 点击其中某一个选中项，变为单选。
+         */
+        if ((_selectedList.count() > 1) && (_selectedList.contains(shape)))
+        {
+            for (auto item : _selectedList)
+            {
+                item->SetSelected(false);
+            }
+
+            _selectedList.clear();
+            shape->SetSelected(true);
+            _selectedList.append(shape);
+        }
+
+        ret = true;
     }
 
     return ret;
@@ -687,6 +678,14 @@ void PaintArea::deleteSelectedShapes()
         }
 
         _selectedList.clear();
-        update();
+        this->viewport()->update();
     }
+}
+
+QPoint PaintArea::AdjustedPos(const QPoint &point) const
+{
+    QPointF newPos(point);
+    newPos.setX(newPos.x() / this->matrix().m11());
+    newPos.setY(newPos.y() / this->matrix().m22());
+    return newPos.toPoint();
 }

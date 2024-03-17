@@ -4,26 +4,28 @@
 #include <QWidget>
 #include <QPen>
 #include <QMap>
+#include <QGraphicsView>
 
 #include "Types.h"
 #include "GeometryShape.h"
 
-class PaintArea : public QWidget
+class PaintArea : public QGraphicsView
 {
     Q_OBJECT
 public:
     constexpr static Qt::CursorShape DefaultCursorShape = Qt::CursorShape::CrossCursor;
 
-    explicit PaintArea(QWidget *parent = nullptr);
+//    explicit PaintArea(QWidget *parent = nullptr);
+    PaintArea(QGraphicsScene *scene, QWidget *parent = nullptr);
     virtual ~PaintArea();
 
     bool eventFilter(QObject *object, QEvent *event) override;
     virtual void SetPaintType(EPaintType type);
+    QPoint AdjustedPos(const QPoint &point) const;
 
 signals:
 
 protected:
-
     void paintEvent(QPaintEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
@@ -50,9 +52,6 @@ private:
     bool _mouseMoveEnabled;
     bool _moveEnabled;
     bool _dragResizeEnabled;
-
-    qreal _scaleX;
-    qreal _scaleY;
 
     QPoint _moveStartCursorPos;
 

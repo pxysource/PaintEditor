@@ -7,7 +7,8 @@
 class PaintImage : public PaintArea
 {
 public:
-    explicit PaintImage(QWidget *parent = nullptr);
+//    explicit PaintImage(QWidget *parent = nullptr);
+    PaintImage(QGraphicsScene *scene, QWidget *parent = nullptr);
     ~PaintImage();
     void LoadImage();
     void SaveImage();

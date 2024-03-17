@@ -4,11 +4,35 @@
 #include <QStackedLayout>
 #include <QResizeEvent>
 #include <QApplication>
+#include <QFileDialog>
+#include <QImage>
+#include <QGraphicsPixmapItem>
 
-PaintAreaMain::PaintAreaMain(QWidget *parent) : PaintArea(parent)
+PaintAreaMain::PaintAreaMain(QGraphicsScene *scene, QWidget *parent) : PaintArea(scene, parent)
   ,_paintImage(nullptr)
 {
-    initGrid();
+    this->setBackgroundBrush(QPixmap(":/images/background1.png"));
+
+    _curPosLabel = new QLabel(this);
+    _curPosLabel->move(20, this->height() - 80);
+    _curPosLabel->setText(QString("X:0 Y:0"));
+    _curPosLabel->setMinimumSize(100, 40);
+    _curPosLabel->setMaximumSize(300, 40);
+//    _curPosLabel->setAutoFillBackground(true);
+    _curPosLabel->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Ignored);
+
+    QFont font = _curPosLabel->font();
+    font.setPointSize(14);
+    font.setWeight(QFont::Bold);
+    font.setItalic(true);
+    font.setUnderline(true);
+    _curPosLabel->setFont(font);
+
+    _curPosLabel->setStyleSheet("background-color:transparent;color:red;");
+//    QPalette p = _curPosLabel->palette();
+//    p.setColor(QPalette::ColorRole::Background, Qt::transparent);
+//    p.setColor(QPalette::ColorRole::WindowText, Qt::red);
+//    _curPosLabel->setPalette(p);
 }
 
 void PaintAreaMain::SetPaintType(EPaintType type)
@@ -24,7 +48,12 @@ void PaintAreaMain::ImageOptChangedHandler(int optMode)
 {
     if (_paintImage == nullptr)
     {
-        _paintImage = new PaintImage(this);
+        QString path = QFileDialog::getOpenFileName(nullptr, "选择图片", "", "Images (*.png *.xpm *.jpg);;All Files (*)");
+//        _paintImage = new PaintImage(this);
+//        _paintImage->setObjectName("PaintImage");
+        QGraphicsScene *scene = new QGraphicsScene(this);
+        QGraphicsPixmapItem *aa = scene->addPixmap(QPixmap(path));
+        _paintImage = new PaintImage(scene, this);
         _paintImage->setObjectName("PaintImage");
         _paintImage->move(100, 100);
     }
@@ -46,14 +75,9 @@ void PaintAreaMain::ImageOptChangedHandler(int optMode)
 
 void PaintAreaMain::paintEvent(QPaintEvent *event)
 {
-    QPainter painter(this);
-
-    painter.save();
-    drawGrid(painter);
-    drawXYCoordinateText(painter);
-    painter.restore();
-
     PaintArea::paintEvent(event);
+    QPainter painter(this->viewport());
+    paintAllShapes(painter);
 }
 
 void PaintAreaMain::wheelEvent(QWheelEvent *event)
@@ -67,6 +91,7 @@ void PaintAreaMain::wheelEvent(QWheelEvent *event)
     {
         QPoint numDegrees = event->angleDelta();
         int step = 0;
+        qreal g = 0;
 
         if (!numDegrees.isNull())
         {
@@ -75,151 +100,43 @@ void PaintAreaMain::wheelEvent(QWheelEvent *event)
 
         event->accept();
 
-        int curWidth = this->width();
-        int curHeight = this->height();
-        curWidth += step;
-        curHeight += step;
         qDebug() << step;
 
         if (step > 0)
         {
-            qDebug() << "Zoom out: " << curWidth << " " << curHeight;
+            g = 2;
+            qDebug() << "Zoom out: " << g;
         }
         else
         {
-            qDebug() << "Zoom in: " << curWidth << " " << curHeight;
+            g = 0.5;
+            qDebug() << "Zoom in: " << g;
         }
 
-        if ((curWidth > this->maximumWidth()) || (curWidth < this->minimumWidth()))
-        {
-            return;
-        }
-        if ((curHeight > this->maximumHeight()) || (curHeight < this->minimumHeight()))
-        {
-            return;
-        }
-
-        resize(curWidth, curHeight);
-
-        if (event->angleDelta().y() > 0)
-        {
-            _gridGap += 0.1;
-        }
-        else if (event->angleDelta().y() < 0)
-        {
-            _gridGap -= 0.1;
-        }
-        else
-        {
-
-        }
-
-        if (_gridGap >= _gridMaxGap)
-        {
-            _gridGap = _gridMinGap;
-        }
-        else if (_gridGap <= _gridMinGap)
-        {
-            _gridGap = _gridMaxGap;
-        }
-
-        update();
+        qDebug() << this->matrix().m11();
+        this->scale(g, g);
+        qDebug() << this->matrix().m11();
     }
 }
 
 void PaintAreaMain::resizeEvent(QResizeEvent *event)
 {
     PaintArea::resizeEvent(event);
-    _gridColLineStartX = 0;
-    _gridRowLineStartY = 0;
-    update();
+    _curPosLabel->move(20, this->height() - 80);
 }
 
-void PaintAreaMain::drawXYCoordinateText(QPainter &painter)
+void PaintAreaMain::mouseMoveEvent(QMouseEvent *e)
 {
-    // TODO: 使用控件绑定到鼠标位置...
-    QString xy = QString("X:%0 Y:%1").arg(QString::number(this->cursor().pos().x())).arg(QString::number(this->cursor().pos().y()));
-    painter.drawText(QPoint(20, this->height() - 30), xy);
+    PaintArea::mouseMoveEvent(e);
+    this->updateXYCoordinateText();
 }
 
-void PaintAreaMain::initGrid()
+void PaintAreaMain::updateXYCoordinateText()
 {
-    _gridMinGap = 20;
-    _gridMaxGap = 30;
-    _gridGap = (_gridMinGap + _gridMaxGap) / 2;
-    _gridColLineStartX = 0;
-    _gridRowLineStartY = 0;
-    _gridLightPen = QPen(QColor("#f0fff0"));
-    _gridLightPen.setStyle(Qt::PenStyle::DotLine);
-    _gridLightPen.setWidth(1);
-    _gridDarkPen  = QPen(QColor("#f0fff0"));
-    _gridDarkPen.setStyle(Qt::PenStyle::DotLine);
-    _gridDarkPen.setWidth(2);
-}
-
-void PaintAreaMain::drawGrid(QPainter &painter)
-{
-    int lineCnt = 0;
-    qreal bigY = _gridRowLineStartY;
-    qreal smallY = _gridRowLineStartY;
-
-    painter.setPen(_gridDarkPen);
-
-    /*
-     * 绘制行线条。
-     */
-    while (true)
-    {
-        painter.drawLine(QPointF(0.0, bigY), QPointF(this->width(), bigY));
-        painter.drawLine(QPointF(0.0, smallY), QPointF(this->width(), smallY));
-
-        bigY += _gridGap;
-        smallY += _gridGap;
-        if ((smallY <= 0) || (bigY >= this->height()))
-        {
-            break;
-        }
-
-        lineCnt++;
-        if (lineCnt == 10)
-        {
-            painter.setPen(_gridDarkPen);
-            lineCnt = 0;
-        }
-        else
-        {
-            painter.setPen(_gridLightPen);
-        }
-    }
-
-    lineCnt = 0;
-    qreal bigX = _gridColLineStartX;
-    qreal smallX = _gridColLineStartX;
-    painter.setPen(_gridDarkPen);
-
-    while (true)
-    {
-        painter.drawLine(QPointF(bigX, 0.0), QPointF(bigX, this->height()));
-        painter.drawLine(QPointF(smallX, 0.0), QPointF(smallX, this->width()));
-
-        bigX += _gridGap;
-        smallX += _gridGap;
-        if ((smallX <=0 ) || (bigX >= this->width()))
-        {
-            break;
-        }
-
-        lineCnt++;
-        if (lineCnt == 10)
-        {
-            painter.setPen(_gridDarkPen);
-            lineCnt = 0;
-        }
-        else
-        {
-            painter.setPen(_gridLightPen);
-        }
-    }
+    QPoint pos = this->AdjustedPos(this->mapFromGlobal(this->cursor().pos()));
+    QString xy = QString("X:%0 Y:%1").arg(QString::number(pos.x())).arg(QString::number(pos.y()));
+    _curPosLabel->setText(xy);
+    _curPosLabel->adjustSize();
 }
 
 PaintAreaMainWrapper::PaintAreaMainWrapper(QWidget *parent) : QWidget(parent)
@@ -231,10 +148,15 @@ void PaintAreaMainWrapper::resizeEvent(QResizeEvent *event)
 {
     QWidget::resizeEvent(event);
 
-    if (!_openToResizeChild && !this->children().isEmpty())
+//    if (!_openToResizeChild && !this->children().isEmpty())
+    if (!this->children().isEmpty())
     {
         auto p = this->findChild<PaintAreaMain *>("paintAreaMain");
-        p->resize(event->size());
-        _openToResizeChild = true;
+
+        if (p != nullptr)
+        {
+            p->resize(event->size());
+            _openToResizeChild = true;
+        }
     }
 }

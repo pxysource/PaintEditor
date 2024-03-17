@@ -15,24 +15,29 @@ GeometryShape::GeometryShape() : _state(0)
     initPen();
 }
 
+void GeometryShape::adjustPenWidthToDefault(QPen &pen, const QPainter &painter, qreal defaultPenWidth)
+{
+    pen.setWidthF(defaultPenWidth / painter.transform().m11());
+}
+
 void GeometryShape::initPen()
 {
     _pointPen.setCapStyle(Qt::PenCapStyle::RoundCap);
-    _pointPen.setWidth(4);
+    _pointPen.setWidthF(DefaultPointPenWidth);
     _pointPen.setColor(Qt::red);
 
     _linePen.setCapStyle(Qt::PenCapStyle::RoundCap);
-    _linePen.setWidth(2);
+    _linePen.setWidthF(DefaultLinePenWidth);
     _linePen.setColor(Qt::red);
 
     _guidePointPen.setCapStyle(Qt::PenCapStyle::RoundCap);
-    _guidePointPen.setWidth(10);
+    _guidePointPen.setWidthF(DefaultGuidePointPenWidth);
 //    _guidePointPen.setBrush(QColor("#7cfc00"));
     _guidePointPen.setBrush(Qt::yellow);
 
     _guideLinePen.setStyle(Qt::PenStyle::DashLine);
     _guideLinePen.setCapStyle(Qt::PenCapStyle::RoundCap);
-    _guideLinePen.setWidth(2);
+    _guideLinePen.setWidthF(DefaultGuideLinePenWidth);
     _guideLinePen.setBrush(QColor("#7cfc00"));
 }
 
@@ -47,6 +52,8 @@ void Point::Paint(QPainter &painter)
     {
         return;
     }
+
+    GeometryShape::Paint(painter);
 
     if (_selected && _moveEnabled)
     {
@@ -114,6 +121,8 @@ Line::Line() : _isNeedGuideLine(false)
 
 void Line::Paint(QPainter &painter)
 {
+    GeometryShape::Paint(painter);
+
     if (_selected && _moveEnabled)
     {
         painter.setPen(_guideLinePen);
@@ -133,7 +142,7 @@ void Line::Paint(QPainter &painter)
 
     if (_completed)
     {
-        painter.setPen(_pointPen);
+        painter.setPen(_linePen);
         painter.drawLine(_line);
     }
 }
@@ -249,6 +258,8 @@ Arc::Arc() : _isNeedGuideArc(false)
 
 void Arc::Paint(QPainter &painter)
 {
+    GeometryShape::Paint(painter);
+
     if (_selected && _moveEnabled)
     {
         painter.setPen(_guideLinePen);
@@ -395,6 +406,8 @@ Circle::Circle() : _isNeedGuide(false)
 
 void Circle::Paint(QPainter &painter)
 {
+    GeometryShape::Paint(painter);
+
     if (_selected && _moveEnabled)
     {
         painter.setPen(_guideLinePen);
@@ -516,6 +529,8 @@ Rect::~Rect()
 
 void Rect::Paint(QPainter &painter)
 {
+    GeometryShape::Paint(painter);
+
     if (_selected)
     {
         if (_dragResizeEnabled)
@@ -867,6 +882,8 @@ Ellipse::Ellipse()
 
 void Ellipse::Paint(QPainter &painter)
 {
+    GeometryShape::Paint(painter);
+
     if (_selected && _moveEnabled)
     {
         painter.setPen(_guidePointPen);
@@ -903,6 +920,8 @@ Polygon::Polygon() : _isShowGuide(false)
 
 void Polygon::Paint(QPainter &painter)
 {
+    GeometryShape::Paint(painter);
+
     if (_selected && _moveEnabled)
     {
         painter.setPen(_guideLinePen);
@@ -988,6 +1007,8 @@ Polyline::Polyline()
 
 void Polyline::Paint(QPainter &painter)
 {
+    GeometryShape::Paint(painter);
+
     if (_selected && _moveEnabled)
     {
         painter.setPen(_guideLinePen);

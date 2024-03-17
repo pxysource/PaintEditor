@@ -6,6 +6,7 @@
 #include <QDebug>
 #include <QSizePolicy>
 #include <QScrollArea>
+#include <QGraphicsScene>
 
 PaintPanel::PaintPanel(QWidget *parent) : QWidget(parent)
 {
@@ -19,12 +20,10 @@ PaintPanel::PaintPanel(QWidget *parent) : QWidget(parent)
     p1.setColor(QPalette::Background, Qt::black);
     _paintAreaMainWrapper->setPalette(p1);
 
-    _paintAreaMain = new PaintAreaMain(_paintAreaMainWrapper);
+    QGraphicsScene *scene1 = new QGraphicsScene(_paintAreaMainWrapper);
+    _paintAreaMain = new PaintAreaMain(scene1, _paintAreaMainWrapper);
     _paintAreaMain->setObjectName("paintAreaMain");
-    QPalette p = _paintAreaMain->palette();
-    p.setColor(QPalette::Background, QColor("#778b88"));
-    _paintAreaMain->setAutoFillBackground(true);
-    _paintAreaMain->setPalette(p);
+//    _paintAreaMain->setBackgroundBrush(QColor("#778b88"));
     _paintAreaMain->setMinimumSize(1000, 800);
     _paintAreaMain->setMaximumSize(4000, 3200);
 

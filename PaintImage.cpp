@@ -5,7 +5,7 @@
 #include <QWheelEvent>
 #include <QDebug>
 
-PaintImage::PaintImage(QWidget *parent) : PaintArea(parent), _saveEnabled(false)
+PaintImage::PaintImage(QGraphicsScene *scene, QWidget *parent) : PaintArea(scene, parent), _saveEnabled(false)
 {
     _image = new QImage();
 }
@@ -17,16 +17,16 @@ PaintImage::~PaintImage()
 
 void PaintImage::LoadImage()
 {
-    QString path = QFileDialog::getOpenFileName(nullptr, "选择图片", "", "Images (*.png *.xpm *.jpg);;All Files (*)");
-    _image->load(path);
-    this->resize(_image->width(), _image->height());
-    update();
+//    QString path = QFileDialog::getOpenFileName(nullptr, "选择图片", "", "Images (*.png *.xpm *.jpg);;All Files (*)");
+//    _image->load(path);
+//    this->resize(_image->width(), _image->height());
+    this->viewport()->update();
 }
 
 void PaintImage::SaveImage()
 {
     _saveEnabled = true;
-    update();
+    this->viewport()->update();
     QString path = QFileDialog::getSaveFileName(nullptr, "保存图片", "", "Images (*.png *.xpm *.jpg);;All Files (*)");
     _image->save(path);
 }
@@ -38,14 +38,14 @@ void PaintImage::ClearImage()
 
 void PaintImage::paintEvent(QPaintEvent *event)
 {
-    Q_UNUSED(event);
+    PaintArea::paintEvent(event);
 
-    QPainter painter(this);
-    QRectF sourceRect(0.0, 0.0, this->width(), this->height());
-    QRectF targetRect(0.0, 0.0, this->width(), this->height());
-    painter.drawImage(targetRect, *_image, sourceRect);
+//    QPainter painter(this->viewport());
+//    QRectF sourceRect(0.0, 0.0, this->width(), this->height());
+//    QRectF targetRect(0.0, 0.0, this->width(), this->height());
+//    painter.drawImage(targetRect, *_image, sourceRect);
 
-    this->paintShapes();
+//    this->paintShapes();
 }
 
 void PaintImage::wheelEvent(QWheelEvent *event)
@@ -59,6 +59,7 @@ void PaintImage::wheelEvent(QWheelEvent *event)
     {
         QPoint numDegrees = event->angleDelta();
         int step = 0;
+        qreal g = 0;
 
         if (!numDegrees.isNull())
         {
@@ -76,10 +77,12 @@ void PaintImage::wheelEvent(QWheelEvent *event)
         if (step > 0)
         {
             qDebug() << "Zoom out: " << curWidth << " " << curHeight;
+            g = 2;
         }
         else
         {
             qDebug() << "Zoom in: " << curWidth << " " << curHeight;
+            g = 0.5;
         }
 
         if ((curWidth > this->maximumWidth()) || (curWidth < this->minimumWidth()))
@@ -91,9 +94,14 @@ void PaintImage::wheelEvent(QWheelEvent *event)
             return;
         }
 
-        *_image = _image->scaled(curWidth, curHeight);
-        qDebug() << _image->size();
-        resize(curWidth, curHeight);
+        qDebug() << this->matrix().m11();
+        this->scale(g, g);
+        qDebug() << this->matrix().m11();
+        this->viewport()->update();
+
+//        *_image = _image->scaled(curWidth, curHeight);
+//        qDebug() << _image->size();
+//        resize(curWidth, curHeight);
     }
 }
 
@@ -106,7 +114,7 @@ void PaintImage::paintShapes()
     }
     else
     {
-        QPainter painter(this);
+        QPainter painter(this->viewport());
         paintAllShapes(painter);
     }
 }

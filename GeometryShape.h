@@ -11,6 +11,10 @@ class GeometryShape
 {
 public:
 //    constexpr static int END_STATE = -1;
+    constexpr static qreal DefaultPointPenWidth = 4.0;
+    constexpr static qreal DefaultGuidePointPenWidth = 10.0;
+    constexpr static qreal DefaultLinePenWidth = 2.0;
+    constexpr static qreal DefaultGuideLinePenWidth = 2.0;
 
     enum EPaintStateType
     {
@@ -21,11 +25,17 @@ public:
 
     GeometryShape();
     virtual ~GeometryShape() {}
-    virtual void Paint(QPainter &painter) = 0;
+    virtual void Paint(QPainter &painter)
+    {
+        this->adjustPenWidthToDefault(_pointPen, painter, DefaultPointPenWidth);
+        this->adjustPenWidthToDefault(_linePen, painter, DefaultLinePenWidth);
+        this->adjustPenWidthToDefault(_guidePointPen, painter, DefaultGuidePointPenWidth);
+        this->adjustPenWidthToDefault(_guideLinePen, painter, DefaultGuideLinePenWidth);
+    }
     virtual void UpdateState(EPaintStateType paintStateType, QPoint point) = 0;
     virtual bool Contains(QPoint point)
     {
-        Q_UNUSED(point);
+        Q_UNUSED(point)
         return false;
     }
     virtual void MoveBegin(const QPoint& point)
@@ -35,7 +45,7 @@ public:
     }
     virtual void Move(QPoint point)
     {
-        Q_UNUSED(point);
+        Q_UNUSED(point)
     }
     virtual void MoveEnd(const QPoint& point)
     {
@@ -70,12 +80,12 @@ public:
 
     virtual Qt::CursorShape GetResizeCursorShape(QPoint point)
     {
-        Q_UNUSED(point);
+        Q_UNUSED(point)
         return Qt::CursorShape::CrossCursor;
     }
     virtual void DragResize(const QPoint &point)
     {
-        Q_UNUSED(point);
+        Q_UNUSED(point)
     }
     virtual void SetDragResizeEnabled(bool enable)
     {
@@ -100,6 +110,7 @@ protected:
     bool _dragResizeEnabled;
     bool _valid;
 
+    void adjustPenWidthToDefault(QPen &pen, const QPainter &painter, qreal defaultPenWidth);
 private:
     void initPen();
 };
